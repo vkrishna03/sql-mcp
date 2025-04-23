@@ -17,13 +17,18 @@ from langchain_mcp_adapters.tools import load_mcp_tools
 
 load_dotenv()
 
-SYSTEM_MESSAGE = """You are a helpful assistant with access to various tools.
-Your task is to assist users by providing accurate information from the database.
-Always respond in a professional and friendly manner. Use tools provided.
-Before executing any query, get details of the database by using the get_database_info tool, 
-check for the table name and then execute the query.
-When you don't know something or need information, say you don't know."""
+SYSTEM_MESSAGE = """You are a helpful assistant that helps users interact with databases.
+You have access to various tools that can help you understand the database structure and execute queries.
 
+Follow these steps when handling user requests:
+1. First use list_all_tables to get all table names in the database.
+2. Use get_table_structure to check the actual structure of relevant tables.
+3. Only then craft and execute SQL queries based on verified table and column names.
+4. Always execute queries with query_data_readonly to get results.
+5. After getting results, format them nicely and explain them in natural language.
+
+Be careful - the schema information from search_schema_for_query may be outdated or incorrect.
+Always verify table structure before executing queries to avoid errors."""
 
 llm = ChatGroq(model="deepseek-r1-distill-llama-70b")
 # llm = ChatOllama(model="llama3.1")
@@ -32,7 +37,7 @@ llm = ChatGroq(model="deepseek-r1-distill-llama-70b")
 def print_items(name: str, result: any) -> None:
     print(f"\nAvailable {name}")
     items = getattr(result, name)
-    
+
     if items:
         for item in items:
             print(" ", item)
@@ -65,6 +70,46 @@ def print_formatted_response(response):
                         print(f"  Tool: {tool_call['function']['name']}")
                         print(f"  Arguments: {tool_call['function']['arguments']}")
 
+async def process_query(agent, query):
+    """Process a user query by letting the agent decide which tools to use"""
+    print(f"\n--- Processing Query: {query} ---\n")
+
+    try:
+        response = await agent.ainvoke(
+            {"messages": [HumanMessage(content=query)]}
+        )
+
+        if "messages" in response:
+            response["messages"] = ensure_tool_message_format(response["messages"])
+        print_formatted_response(response)
+
+        return response
+    except Exception as e:
+        print("Error processing query:")
+        traceback.print_exception(type(e), e, e.__traceback__)
+        return None
+
+async def interactive_mode(agent):
+    """Run an interactive session"""
+    print("\n=== Interactive Mode ===")
+    print("Type your questions in natural language. Type 'exit' to quit.\n")
+
+    while True:
+        try:
+            query = input("\nEnter your question: ")
+            if query.lower() in ['exit', 'quit', 'q']:
+                print("Exiting interactive mode.")
+                break
+
+            await process_query(agent, query)
+
+        except KeyboardInterrupt:
+            print("\nInterrupted. Exiting interactive mode.")
+            break
+        except Exception as e:
+            print(f"Error: {str(e)}")
+
+
 async def main():
     try:
         async with sse_client("http://localhost:8000/sse") as streams:
@@ -81,24 +126,13 @@ async def main():
 
                 agent = create_react_agent(model=llm, tools=tools, prompt=SYSTEM_MESSAGE)
 
-                print("\nLangchain app...")
+                print("\nSQL Assistant...")
 
-                try:
-                    response = await agent.ainvoke(
-                        {"messages": [HumanMessage(content="List out all the users in the database.")]}
-                    )
+                # Example query
+                await process_query(agent, "List out all the users and departments in the database.")
 
-                    if "messages" in response:
-                        response["messages"] = ensure_tool_message_format(response["messages"])
-                    print_formatted_response(response)
-                    
-                    
-                except Exception as tool_exc:
-                    print("Error occured:")
-                    traceback.print_exception(
-                        type(tool_exc), tool_exc, tool_exc.__traceback__
-                    )
-
+                # Interactive mode:
+                # await interactive_mode(agent)
     except Exception as e:
         print(f"Error connecting to server: {e}")
         traceback.print_exception(type(e), e, e.__traceback__)
