@@ -262,9 +262,11 @@ starlette_app = Starlette(
 )
 
 @starlette_app.on_event("startup")
-def startup_event():
+async def startup_event():
     # Update schema embeddings synchronously at startup
-    update_schema_embeddings()
+    from sql_mcp.server.schema_embeddings import initialize_schema_embeddings, start_periodic_schema_updates
+
+    await initialize_schema_embeddings()
     # Start background thread for periodic updates
     start_periodic_schema_updates()
     logger.info("Schema embeddings initialized")
