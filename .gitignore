@@ -1,4 +1,33 @@
-.env
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.cache/
+*.sqlite3
 
-__pycache__
-.cache
+# Environment
+.env
+.env.local
+.env.prod
+*.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Poetry
+poetry.lock
+
+# Misc
+*.log
