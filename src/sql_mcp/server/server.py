@@ -13,11 +13,13 @@ from mcp.server.sse import SseServerTransport
 from starlette.requests import Request
 from starlette.applications import Starlette
 from starlette.routing import Route, Mount
-from sql_mcp.server.schema_embeddings import (
+from sql_mcp.server.embeddings import (
+    search_schema,
     update_schema_embeddings,
     start_periodic_schema_updates,
-    search_schema
+    initialize_schema_embeddings
 )
+from sql_mcp.server.utils.helpers import sanitize_sql, log_api_usage
 
 
 mcp = FastMCP("sql-mcp-server")
@@ -37,30 +39,41 @@ def say_hello(text: str) -> str:
 def query_data_readonly(sql: str) -> str:
     """Execute read-only SQL queries and return results as JSON"""
     logger.info(f"Executing read-only SQL query: {sql}")
-
-    conn = None
+    
     try:
-        conn = psycopg2.connect(
-            DATABASE_URI,
-            cursor_factory=RealDictCursor
-        )
-        # Set transaction to read-only
-        conn.set_session(readonly=True)
+        # Sanitize the SQL to prevent injection attacks
+        sanitized_sql = sanitize_sql(sql)
+        
+        conn = None
+        try:
+            conn = psycopg2.connect(
+                DATABASE_URI,
+                cursor_factory=RealDictCursor
+            )
+            # Set transaction to read-only
+            conn.set_session(readonly=True)
+            
+            with conn.cursor() as cur:
+                cur.execute(sanitized_sql)
+                rows = cur.fetchall()
+                # Log successful query
+                log_api_usage("query_data_readonly", metadata={"row_count": len(rows)})
+                # RealDictCursor returns results as dictionaries
+                return json.dumps(rows, default=str)
+                
+        except Exception as e:
+            logger.error(f"Query error: {str(e)}")
+            log_api_usage("query_data_readonly", success=False, error=e)
+            return json.dumps({"error": str(e)})
+            
+        finally:
+            if conn:
+                conn.rollback()  # Always rollback read-only transaction
+                conn.close()
+    except ValueError as ve:
 
-        with conn.cursor() as cur:
-            cur.execute(sql)
-            rows = cur.fetchall()
-            # RealDictCursor returns results as dictionaries
-            return json.dumps(rows, default=str)
-
-    except Exception as e:
-        logger.error(f"Query error: {str(e)}")
-        return json.dumps({"error": str(e)})
-
-    finally:
-        if conn:
-            conn.rollback()  # Always rollback read-only transaction
-            conn.close()
+        log_api_usage("query_data_readonly", success=False, error=ve)
+        return json.dumps({"error": f"SQL validation failed: {str(ve)}"})
 
 @mcp.tool()
 def search_schema_for_query(query: str) -> str:
@@ -70,10 +83,10 @@ def search_schema_for_query(query: str) -> str:
     logger.info(f"Searching schema for: {query}")
 
     # Add some common variations to improve search
-    expanded_query = f"{query} table schema columns users user accounts members customers profiles"
+    expanded_query = f"{query}"
 
     # Perform the search with expanded query and lower threshold
-    results = search_schema(expanded_query, top_k=10)
+    results = search_schema(expanded_query, top_k=5)
 
     if not results or not results['matches']:
         return json.dumps({
@@ -83,7 +96,7 @@ def search_schema_for_query(query: str) -> str:
 
     relevant_tables = []
     for match in results['matches']:
-        if match['score'] < 0.4:  # Threshold for relevance
+        if match['score'] < 0.6:  # Threshold for relevance
             continue
 
         metadata = match['metadata']
@@ -101,7 +114,7 @@ def search_schema_for_query(query: str) -> str:
         "success": True
     }, indent=2)
 
-@mcp.tool()
+# @mcp.tool()
 def list_all_tables() -> str:
     """List all tables in the database"""
     logger.info("Listing all tables in database")
