@@ -86,7 +86,7 @@ def search_schema_for_query(query: str) -> str:
     expanded_query = f"{query}"
 
     # Perform the search with expanded query and lower threshold
-    results = search_schema(expanded_query, top_k=5)
+    results = search_schema(expanded_query, top_k=10)
 
     if not results or not results['matches']:
         return json.dumps({
@@ -96,7 +96,7 @@ def search_schema_for_query(query: str) -> str:
 
     relevant_tables = []
     for match in results['matches']:
-        if match['score'] < 0.6:  # Threshold for relevance
+        if match['score'] < 0.3:  # Threshold for relevance
             continue
 
         metadata = match['metadata']

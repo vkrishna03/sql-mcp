@@ -23,14 +23,16 @@ You have access to various tools that can help you understand the database struc
 Follow these steps when handling user requests:
 1. First use search_schema_for_query to get all relevant table names in the database.
 2. Use get_table_structure to check the actual structure of relevant tables.
-3. Only then craft and execute SQL queries based on verified table and column names.
+3. Only then craft and execute SQL queries for a postgres database based on verified table and column names.
+Say if you got a table named user, you should query like SELECT * FROM public.user
 4. Always execute queries with query_data_readonly to get results.
 5. After getting results, format them nicely and explain them in natural language.
 
 Be careful - the schema information from search_schema_for_query may be outdated or incorrect.
-Always verify table structure before executing queries to avoid errors."""
+Always verify table structure before executing queries to avoid errors.
+"""
 
-llm = ChatGroq(model="meta-llama/llama-4-maverick-17b-128e-instruct")
+llm = ChatGroq(model="meta-llama/llama-4-scout-17b-16e-instruct")
 # llm = ChatOllama(model="llama3.1")
 
 
@@ -129,7 +131,7 @@ async def main():
                 print("\nSQL Assistant...")
 
                 # Example query
-                await process_query(agent, "List out all the users and departments in the database.")
+                await process_query(agent, "List out all the users,rewards and departments in the database.")
 
                 # Interactive mode:
                 # await interactive_mode(agent)
