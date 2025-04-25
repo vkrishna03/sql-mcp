@@ -17,19 +17,9 @@ from langchain_mcp_adapters.tools import load_mcp_tools
 
 load_dotenv()
 
-SYSTEM_MESSAGE = """You are a helpful assistant that helps users interact with databases.
-You have access to various tools that can help you understand the database structure and execute queries.
-
-Follow these steps when handling user requests:
-1. First use search_schema_for_query to get all relevant table names in the database.
-2. Use get_table_structure to check the actual structure of relevant tables.
-3. Only then craft and execute SQL queries for a postgres database based on verified table and column names.
-Say if you got a table named user, you should query like SELECT * FROM public.user
-4. Always execute queries with query_data_readonly to get results.
-5. After getting results, format them nicely and explain them in natural language.
-
-Be careful - the schema information from search_schema_for_query may be outdated or incorrect.
-Always verify table structure before executing queries to avoid errors.
+SYSTEM_MESSAGE = """You are a text-to-sql agent. 
+You should create a sql query based on natural language and 
+use it with given tools to generate the output if possible.
 """
 
 llm = ChatGroq(model="meta-llama/llama-4-scout-17b-16e-instruct")
@@ -131,7 +121,7 @@ async def main():
                 print("\nSQL Assistant...")
 
                 # Example query
-                await process_query(agent, "List out all the users,rewards and departments in the database.")
+                await process_query(agent, "Who are there in the organisation? What rewards can be given to an employee? Who are nominated?")
 
                 # Interactive mode:
                 # await interactive_mode(agent)
